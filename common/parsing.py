@@ -27,7 +27,7 @@ def parse_trade(raw: dict) -> dict:
         quantity = float(raw["q"])
         trade_id = int(raw["t"])
         trade_time_ms = int(raw["T"])
-    except (TypeError, ValueError) as exc:
+    except (TypeError, ValueError, OverflowError) as exc:
         raise InvalidTradeError(f"invalid field type: {exc}") from exc
 
     if not (math.isfinite(price) and math.isfinite(quantity) and price > 0 and quantity > 0):
