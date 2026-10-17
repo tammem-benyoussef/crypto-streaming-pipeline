@@ -37,7 +37,16 @@ def test_missing_field_raises():
 
 @pytest.mark.parametrize(
     "field,value",
-    [("p", "0"), ("p", "-1"), ("q", "0"), ("p", "abc"), ("p", "nan"), ("t", "x")],
+    [
+        ("p", "0"),
+        ("p", "-1"),
+        ("q", "0"),
+        ("p", "abc"),
+        ("p", "nan"),
+        ("t", "x"),
+        ("t", float("inf")),
+        ("T", float("inf")),
+    ],
 )
 def test_invalid_values_raise(field, value):
     bad = {**VALID, field: value}
