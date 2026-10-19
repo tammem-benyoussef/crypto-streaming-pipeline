@@ -4,7 +4,7 @@ version = "0.1.0"
 requires-python = ">=3.11"
 dependencies = [
     "confluent-kafka>=2.16.0",
-    "pandas>=3.0.6",
+    "pandas<3",
     "psycopg[binary]>=3.3.6",
     "websockets>=17.2",
 ]
@@ -12,6 +12,7 @@ dependencies = [
 [dependency-groups]
 dev = [
     "pre-commit>=4.7.0",
+    "pyspark==4.2.0",
     "pytest>=9.1.1",
     "ruff>=0.17.0",
 ]
@@ -19,6 +20,7 @@ dev = [
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
+markers = ["spark: tests that need Java and pyspark"]
 
 [tool.ruff]
 line-length = 100
