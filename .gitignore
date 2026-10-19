@@ -8,3 +8,8 @@ data/captures/
 .ruff_cache/
 .idea/
 .vscode/
+
+checkpoints/
+spark-warehouse/
+metastore_db/
+derby.log
