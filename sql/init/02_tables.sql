@@ -16,20 +16,3 @@ CREATE TABLE IF NOT EXISTS live.bars_1m (
     PRIMARY KEY (symbol, window_start)
 );
 
--- Latest known price per symbol (upserted continuously).
-CREATE TABLE IF NOT EXISTS live.latest_price (
-    symbol      TEXT             PRIMARY KEY,
-    price       DOUBLE PRECISION NOT NULL,
-    trade_time  TIMESTAMPTZ      NOT NULL
-);
-
--- Trades that arrived after their window was closed.
-CREATE TABLE IF NOT EXISTS live.late_events (
-    symbol        TEXT             NOT NULL,
-    trade_id      BIGINT           NOT NULL,
-    trade_time    TIMESTAMPTZ      NOT NULL,
-    price         DOUBLE PRECISION NOT NULL,
-    quantity      DOUBLE PRECISION NOT NULL,
-    detected_at   TIMESTAMPTZ      NOT NULL DEFAULT now(),
-    PRIMARY KEY (symbol, trade_id)
-);
