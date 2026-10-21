@@ -36,6 +36,61 @@ services:
       timeout: 5s
       retries: 5
 
+  topics-init:
+    image: docker.redpanda.com/redpandadata/redpanda:v24.2.7
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - rpk -X brokers=redpanda:9092 topic create trades.raw trades.v1 trades.dlq -p 3 || true
+    restart: "no"
+
+  producer:
+    build:
+      context: .
+      dockerfile: producer/Dockerfile
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      SYMBOLS: ${SYMBOLS:-BTCUSDT,ETHUSDT,SOLUSDT}
+    depends_on:
+      topics-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  validator:
+    build:
+      context: .
+      dockerfile: validator/Dockerfile
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+    depends_on:
+      topics-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  spark:
+    build:
+      context: .
+      dockerfile: spark_jobs/Dockerfile
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      CHECKPOINT_DIR: /checkpoints/bars_1m
+    volumes:
+      - spark-checkpoints:/checkpoints
+    depends_on:
+      postgres:
+        condition: service_healthy
+      topics-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
 volumes:
   redpanda-data:
   postgres-data:
+  spark-checkpoints:
