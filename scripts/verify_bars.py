@@ -100,10 +100,14 @@ def main() -> int:
     if len(sys.argv) > 1:
         first = max(first, time.time() - int(sys.argv[1]) * 60)
     last = time.time() - SETTLE_SECONDS
-    expected = expected[(expected["window_start_s"] >= first) & (expected["window_start_s"] + 60 <= last)]
+    expected = expected[
+        (expected["window_start_s"] >= first) & (expected["window_start_s"] + 60 <= last)
+    ]
     actual = actual[(actual["window_start_s"] >= first) & (actual["window_start_s"] + 60 <= last)]
 
-    merged = expected.merge(actual, on=KEYS, how="outer", suffixes=("_kafka", "_db"), indicator=True)
+    merged = expected.merge(
+        actual, on=KEYS, how="outer", suffixes=("_kafka", "_db"), indicator=True
+    )
     missing = merged[merged["_merge"] == "left_only"]
     extra = merged[merged["_merge"] == "right_only"]
     both = merged[merged["_merge"] == "both"]
