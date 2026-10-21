@@ -2,11 +2,9 @@
 
 import logging
 import os
-import time
 
 import psycopg
 from pyspark.sql import DataFrame, SparkSession
-from pyspark.sql.streaming import StreamingQueryListener
 
 from spark_jobs.transforms import aggregate_bars, deduplicate, parse_trades
 
@@ -37,25 +35,6 @@ ON CONFLICT (symbol, window_start) DO UPDATE SET
 """
 
 
-def batch_summary(rows: list[tuple]) -> tuple[int, int | None, int | None]:
-    """Return the emitted row count and the inclusive window-start bounds."""
-    if not rows:
-        return 0, None, None
-    starts = [row[1] for row in rows]
-    return len(rows), min(starts), max(starts)
-
-
-def _sleep_for_test(env_name: str) -> None:
-    value = os.getenv(env_name)
-    if value is None:
-        return
-    seconds = float(value)
-    if seconds < 0:
-        raise ValueError(f"{env_name} must not be negative")
-    logger.warning("test hook: sleeping %.3f seconds for %s", seconds, env_name)
-    time.sleep(seconds)
-
-
 def connect() -> psycopg.Connection:
     return psycopg.connect(
         host=os.getenv("POSTGRES_HOST", "localhost"),
@@ -69,40 +48,11 @@ def connect() -> psycopg.Connection:
 def write_batch(batch_df: DataFrame, batch_id: int) -> None:
     """Upsert the finished bars of this micro-batch. Safe to run twice for the same batch."""
     rows = [tuple(row) for row in batch_df.collect()]
-    count, min_start, max_start = batch_summary(rows)
-    logger.info(
-        "batch %d: emitted_rows=%d window_start_min=%s window_start_max=%s",
-        batch_id,
-        count,
-        min_start,
-        max_start,
-    )
     if not rows:
         return
-    _sleep_for_test("BARS_TEST_SLEEP_BEFORE_WRITE_SECONDS")
     with connect() as conn, conn.cursor() as cur:
         cur.executemany(UPSERT_SQL, rows)
-    logger.info("batch %d: postgres commit complete", batch_id)
-    _sleep_for_test("BARS_WRITE_SLEEP_SECONDS")
     logger.info("batch %d: upserted %d bars", batch_id, len(rows))
-
-
-class ProgressLogger(StreamingQueryListener):
-    """Log the watermark associated with each completed streaming batch."""
-
-    def onQueryStarted(self, event) -> None:
-        pass
-
-    def onQueryProgress(self, event) -> None:
-        progress = event.progress
-        logger.info(
-            "progress batch %d: watermark=%s",
-            progress.batchId,
-            progress.eventTime.get("watermark"),
-        )
-
-    def onQueryTerminated(self, event) -> None:
-        pass
 
 
 def main() -> None:
@@ -116,7 +66,6 @@ def main() -> None:
         .getOrCreate()
     )
     spark.sparkContext.setLogLevel("WARN")
-    spark.streams.addListener(ProgressLogger())
 
     kafka_df = (
         spark.readStream.format("kafka")
