@@ -6,6 +6,7 @@ import pytest
 from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
 
+from spark_jobs.bars_job import batch_summary
 from spark_jobs.transforms import TRADE_SCHEMA, add_event_time, aggregate_bars
 
 pytestmark = pytest.mark.spark
@@ -92,3 +93,15 @@ def test_bars_do_not_depend_on_input_order(spark):
 def test_window_end_is_one_minute_after_start(spark):
     bars = spark_bars(spark)
     assert ((bars["window_end_s"] - bars["window_start_s"]) == 60).all()
+
+
+def test_batch_summary_reports_emitted_window_bounds():
+    rows = [
+        ("BTCUSDT", 120, 180, 1, 2.0),
+        ("ETHUSDT", 60, 120, 1, 3.0),
+    ]
+    assert batch_summary(rows) == (2, 60, 120)
+
+
+def test_batch_summary_handles_empty_batch():
+    assert batch_summary([]) == (0, None, None)
