@@ -4,13 +4,13 @@ version = "0.1.0"
 requires-python = ">=3.11"
 dependencies = [
     "confluent-kafka>=2.16.0",
-    "pandas<3",
     "psycopg[binary]>=3.3.6",
     "websockets>=17.2",
 ]
 
 [dependency-groups]
 dev = [
+    "pandas<3",
     "pre-commit>=4.7.0",
     "pyspark==4.2.0",
     "pytest>=9.1.1",
