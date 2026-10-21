@@ -1,0 +1,14 @@
+.git
+.venv
+__pycache__
+*.pyc
+.env
+checkpoints
+data
+tests
+docs
+dashboards
+.github
+.ruff_cache
+.pytest_cache
+spark-warehouse
