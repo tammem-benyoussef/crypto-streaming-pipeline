@@ -1,5 +1,3 @@
--- One row per symbol per minute. The primary key makes writes idempotent:
--- writing the same window twice updates the row instead of duplicating it.
 CREATE TABLE IF NOT EXISTS live.bars_1m (
     symbol            TEXT             NOT NULL,
     window_start      TIMESTAMPTZ      NOT NULL,

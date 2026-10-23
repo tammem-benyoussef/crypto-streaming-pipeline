@@ -1,7 +1,6 @@
 FROM spark:4.2.0-scala2.13-java17-python3-ubuntu
 
 USER root
-# Use the psycopg version from uv.lock.
 RUN pip3 install --no-cache-dir "psycopg[binary]==3.3.6"
 WORKDIR /app
 COPY spark_jobs ./spark_jobs
@@ -12,7 +11,6 @@ RUN mkdir -p /checkpoints /home/spark \
 USER spark
 ENV HOME=/home/spark
 
-# Bake the Kafka connector and its dependencies into the image (resolved once, at build time).
 RUN /opt/spark/bin/spark-submit \
       --conf spark.jars.ivy=/home/spark/.ivy2 \
       --packages org.apache.spark:spark-sql-kafka-0-10_2.13:4.2.0 \
