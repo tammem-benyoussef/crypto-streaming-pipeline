@@ -103,8 +103,12 @@ promptly, and flushes pending Kafka messages during shutdown.
 `validator/` consumes `trades.raw`, validates and normalizes each trade, then
 writes valid records to `trades.v1` and invalid records to `trades.dlq`.
 Output is delivered before the input offset is committed. This is an
-at-least-once design: a crash can cause a duplicate, but the ordering avoids
-silently losing an input message.
+at-least-once design for messages successfully read from `trades.raw`: a crash
+after output delivery but before the offset commit can cause the message to be
+processed again, but the ordering avoids silently losing it. Valid output is
+deduplicated by Spark on `(symbol, trade_id)` while the watermark retains that
+deduplication state; DLQ records do not have that downstream deduplication
+guarantee.
 
 ### Spark Structured Streaming
 
@@ -288,8 +292,16 @@ finalized aggregation and are not logged by a separate late-event sink.
 ## Dashboard
 
 The `dashboard/crypto.pbix` file is an **Import-mode snapshot** of an
-approximately four-hour capture. It is not a live connection simply because
-the source pipeline is streaming. The PNG above is a static preview.
+approximately four-hour capture. The report contains a copy of the data
+imported when that file was created; it does not query this repository's
+PostgreSQL instance or update merely because the upstream pipeline is
+streaming. The PNG above is a static preview.
+
+In this README, a **live connection** means that Power BI is configured to
+query the running PostgreSQL database (or to refresh an imported dataset).
+Streaming in the producer, Kafka, and Spark services only updates the pipeline
+and its database; it does not establish a Power BI connection or push updates
+to an already-imported PBIX file.
 
 The report contains Power BI measures for latest price, selected-period price
 change, USDT volume, buy-volume share, and rolling volatility. Volatility is
@@ -309,8 +321,9 @@ In Power BI Desktop, change the PostgreSQL source to:
 - **Connection mode:** DirectQuery
 
 Then configure page refresh at an interval supported by the Power BI edition and
-connection. DirectQuery queries PostgreSQL when the visuals refresh; it does not
-remove Power BI's refresh and capacity limitations.
+connection. DirectQuery queries PostgreSQL when the visuals or report refresh;
+it is therefore closer to live monitoring, but it does not push every incoming
+trade to the report or remove Power BI's refresh and capacity limitations.
 
 ## Verification
 
@@ -319,9 +332,6 @@ The repository currently contains:
 - a pytest suite under `tests/`;
 - `scripts/verify_bars.py`, an independent pandas reference comparison that
   recounts `trades.v1` and compares finalized bars with `live.bars_1m`.
-
-There is no `scripts/smoke_test.sh` in this repository. The verification script
-requires a running Kafka-compatible broker and PostgreSQL database.
 
 ## Results
 
@@ -336,30 +346,6 @@ The following figures are marked as **observed locally** from this project:
 TODO(me): add repeatable benchmark commands and environment details for these
 observations.
 
-## Limitations
-
-- There is no backfill for trades missed while the producer is disconnected.
-- Trade-ID gap detection is not implemented, so the producer does not report
-  the number of missed trades.
-- There is no application-level idle watchdog; WebSocket ping/pong only checks
-  protocol-level connection health.
-- Spark can drop events that arrive after the 10-second watermark without a
-  separate late-event log.
-- Bars lag the wall clock because Spark uses micro-batches, event-time windows,
-  watermarking, and append mode. In normal operation, finalized bars are
-  expected after processing and watermark progress rather than exactly at the
-  minute boundary; TODO(me): record a measured latency range.
-- Spark runs in the local single-node mode supplied by the image; this is not a
-  distributed production cluster.
-- The local setup has one Redpanda broker and does not provide production
-  replication; the topic initialization requests three partitions but not
-  multi-broker replication.
-- Binance is the only exchange supported by the producer.
-- `live.bars_1m` has no database retention policy.
-- Binance's public stream may be blocked or unavailable in some regions.
-- USDT is a stablecoin, not the same thing as USD.
-- The Compose configuration is for local development and portfolio
-  demonstration, not production deployment.
 
 ## Design decisions
 
@@ -367,9 +353,12 @@ The raw topic is kept unmodified before validation so events remain available
 for replay and debugging. The trade-off is one extra service and topic.
 
 The pipeline uses at-least-once delivery with idempotent PostgreSQL upserts
-instead of claiming end-to-end exactly-once processing. The validator writes
-output before committing input offsets, so a failure can create duplicates but
-avoids silently losing an input.
+instead of claiming end-to-end exactly-once processing. For messages the
+validator has read from `trades.raw`, it writes output before committing the
+input offset, so a failure between those operations can create duplicates but
+does not silently lose the input. The producer can still miss exchange trades
+during a WebSocket disconnect, as noted above, because there is no exchange
+trade-ID gap detector or historical backfill.
 
 Spark uses append mode so PostgreSQL receives finished bars rather than
 constantly changing partial results. Bars may appear roughly 20–80 seconds
